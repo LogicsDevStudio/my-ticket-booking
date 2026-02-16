@@ -11,7 +11,12 @@
         /* Navbar */
         .navbar { background: white; padding: 15px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
         .logo { font-size: 1.2rem; font-weight: bold; color: #007bff; text-decoration: none; }
-        .btn-admin { background: #333; color: white; text-decoration: none; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; }
+        
+        .nav-group { display: flex; gap: 10px; align-items: center; }
+        .btn-nav { border: 1px solid #ddd; background: white; color: #333; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; cursor: pointer; text-decoration: none; }
+        .btn-nav:hover { background: #f8f9fa; }
+        .btn-admin { background: #333; color: white; border: none; }
+        .btn-logout { color: red; border-color: #ffcccc; }
 
         .container { max-width: 800px; margin: 20px auto; padding: 0 15px; }
 
@@ -32,7 +37,7 @@
         .card-info { color: #666; font-size: 0.9rem; margin-bottom: 15px; }
         .btn-book { background: #007bff; color: white; border: none; padding: 8px 0; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
-        /* --- Booking Page Styles (จากโค้ดเดิม) --- */
+        /* --- Booking Page Styles --- */
         .booking-container { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
         .screen { background: #333; color: white; padding: 5px; margin: 15px 0; border-radius: 5px; font-size: 0.8rem; text-align: center; }
         .seat-row { display: flex; justify-content: center; margin-bottom: 8px; gap: 8px; }
@@ -51,13 +56,22 @@
         /* Modal Form */
         #bookingForm { margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; display: none; }
         input[type="text"] { padding: 10px; width: 70%; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px; }
+
+        /* History Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 10px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+        .history-item { border-bottom: 1px solid #eee; padding: 10px 0; text-align: left; }
+        .history-date { font-size: 0.8rem; color: #888; }
     </style>
 </head>
 <body>
 
     <nav class="navbar">
         <a href="index.html" class="logo">🎟️ Booking System</a>
-        <a href="admin.html" class="btn-admin">เข้าสู่ระบบแอดมิน</a>
+        
+        <div id="navAuth" class="nav-group">
+            <a href="login.html" class="btn-nav btn-primary">เข้าสู่ระบบ</a>
+        </div>
     </nav>
 
     <div class="container">
@@ -107,37 +121,85 @@
         </div>
     </div>
 
+    <div id="historyModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;">📜 ประวัติการจองของคุณ</h3>
+                <button onclick="closeHistory()" style="background:none; border:none; font-size:1.2rem; cursor:pointer;">&times;</button>
+            </div>
+            <div id="historyList">
+                <p style="text-align:center; color:#666;">กำลังโหลด...</p>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, onValue, set, remove, onDisconnect, runTransaction, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, onValue, set, remove, onDisconnect, runTransaction, get, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         // --- แก้ไข Config ตรงนี้ ---
         const firebaseConfig = {
-        apiKey: "AIzaSyCVrVE7okZklN4vmb32RSzsC7JdV7YmcVs",
-        authDomain: "oph-booking.firebaseapp.com",
-        databaseURL: "https://oph-booking-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "oph-booking",
-        storageBucket: "oph-booking.firebasestorage.app",
-        messagingSenderId: "222932745199",
-        appId: "1:222932745199:web:2f899a96964ab5a5f5141a"
+            apiKey: "AIzaSyCVrVE7okZklN4vmb32RSzsC7JdV7YmcVs",
+            authDomain: "oph-booking.firebaseapp.com",
+            databaseURL: "https://oph-booking-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "oph-booking",
+            storageBucket: "oph-booking.firebasestorage.app",
+            messagingSenderId: "222932745199",
+            appId: "1:222932745199:web:2f899a96964ab5a5f5141a"
         };
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxdHa_9aRkfX9N5lz_lQr-2xdjm8jyrWY6vmM63ixfw3JSws8w2J8UglEs-bGnuU5wHFw/exec"; 
         // -------------------------
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-        const mySessionId = 'user_' + Math.random().toString(36).substr(2, 9);
+        const auth = getAuth(app);
 
-        // เช็ค URL ว่ามี id หรือไม่?
+        let currentUser = null;
+        let mySessionId = null; // จะใช้ User UID แทน
+
         const urlParams = new URLSearchParams(window.location.search);
         const eventId = urlParams.get('id');
 
-        // Logic หลัก: แยกหน้า Landing vs Booking
-        if (!eventId) {
-            initLandingPage();
-        } else {
-            initBookingPage();
-        }
+        // ================= AUTH CHECK & NAVBAR =================
+        onAuthStateChanged(auth, (user) => {
+            const navAuth = document.getElementById('navAuth');
+            
+            if (user) {
+                // ล็อกอินแล้ว
+                currentUser = user;
+                mySessionId = user.uid; // ใช้ UID เป็น Session ID
+                
+                // เช็ค Role ว่าเป็น Admin ไหม?
+                get(ref(db, 'users/' + user.uid + '/role')).then((snapshot) => {
+                    const role = snapshot.val();
+                    let adminBtn = '';
+                    if (role === 'admin') {
+                        adminBtn = `<a href="admin.html" class="btn-nav btn-admin">Admin Panel</a>`;
+                    }
+                    
+                    navAuth.innerHTML = `
+                        <span style="font-size:0.9rem; margin-right:5px;">👤 ${user.email}</span>
+                        ${adminBtn}
+                        <button onclick="openHistory()" class="btn-nav">📜 ประวัติ</button>
+                        <button onclick="logout()" class="btn-nav btn-logout">ออก</button>
+                    `;
+                });
+
+            } else {
+                // ยังไม่ล็อกอิน
+                currentUser = null;
+                navAuth.innerHTML = `<a href="login.html" class="btn-nav" style="background:#007bff; color:white; border:none;">เข้าสู่ระบบ / สมัครสมาชิก</a>`;
+            }
+
+            // เริ่มโหลดหน้าเว็บ
+            if (!eventId) initLandingPage();
+            else initBookingPage();
+        });
+
+        window.logout = () => {
+            signOut(auth).then(() => window.location.reload());
+        };
 
         // ================= PART 1: LANDING PAGE =================
         function initLandingPage() {
@@ -155,7 +217,6 @@
 
                 Object.keys(data).forEach(key => {
                     const event = data[key];
-                    // สร้าง Card HTML
                     const card = document.createElement('div');
                     card.className = 'event-card';
                     
@@ -173,7 +234,6 @@
                             <button class="btn-book">เข้าสู่หน้าจอง</button>
                         </div>
                     `;
-                    // เมื่อคลิกการ์ด ให้ไปหน้าจอง
                     card.onclick = () => {
                         window.location.href = `index.html?id=${key}`;
                     };
@@ -189,7 +249,6 @@
         function initBookingPage() {
             document.getElementById('bookingPage').classList.remove('hidden');
             
-            // โหลดข้อมูลอีเวนต์นั้นๆ
             get(ref(db, 'events/' + eventId)).then((snapshot) => {
                 if (!snapshot.exists()) {
                     alert("ไม่พบอีเวนต์นี้ หรืออาจะถูกลบไปแล้ว");
@@ -203,12 +262,8 @@
 
         function renderBookingInterface() {
             document.getElementById('eventName').innerText = eventData.name;
-
-            if (eventData.type === 'cinema') {
-                setupCinema();
-            } else {
-                setupGeneral();
-            }
+            if (eventData.type === 'cinema') setupCinema();
+            else setupGeneral();
         }
 
         // --- Cinema Logic ---
@@ -238,7 +293,6 @@
                 mapDiv.appendChild(rowDiv);
             }
 
-            // Realtime Listener
             onValue(ref(db, `events/${eventId}/seats`), (snapshot) => {
                 const seatsData = snapshot.val() || {};
                 document.querySelectorAll('.seat').forEach(el => {
@@ -249,7 +303,7 @@
                     if (sData) {
                         if (sData.status === 'taken') el.classList.add('taken');
                         else if (sData.status === 'holding') {
-                            if (sData.holder === mySessionId) {
+                            if (currentUser && sData.holder === currentUser.uid) {
                                 el.classList.add('holding-me');
                                 myCurrentSeat = sId;
                                 showForm(sId);
@@ -263,6 +317,8 @@
         }
 
         window.selectSeatCinema = (seatId) => {
+            if (!currentUser) return alert("กรุณาเข้าสู่ระบบก่อนทำการจอง");
+            
             const el = document.getElementById(seatId);
             if (el.classList.contains('taken') || el.classList.contains('holding-other')) return;
 
@@ -273,7 +329,7 @@
             if (myCurrentSeat) remove(ref(db, `events/${eventId}/seats/${myCurrentSeat}`));
 
             const seatRef = ref(db, `events/${eventId}/seats/${seatId}`);
-            set(seatRef, { status: 'holding', holder: mySessionId, timestamp: Date.now() });
+            set(seatRef, { status: 'holding', holder: currentUser.uid, timestamp: Date.now() });
             onDisconnect(seatRef).remove();
         };
 
@@ -296,7 +352,10 @@
                 }
             });
 
-            document.getElementById('generalBookBtn').onclick = () => showForm("บัตรเข้าร่วมงาน");
+            document.getElementById('generalBookBtn').onclick = () => {
+                if (!currentUser) return alert("กรุณาเข้าสู่ระบบก่อนทำการจอง");
+                showForm("บัตรเข้าร่วมงาน");
+            };
         }
 
         // --- Shared Actions ---
@@ -320,18 +379,22 @@
         };
 
         window.confirmBooking = () => {
+            if (!currentUser) return alert("กรุณาเข้าสู่ระบบ");
             const name = document.getElementById('userName').value.trim();
             if (!name) return alert("กรุณากรอกชื่อ");
 
             if (eventData.type === 'cinema') {
-                // Cinema Booking
                 if (!myCurrentSeat) return;
+                
+                // 1. Save to Event
                 set(ref(db, `events/${eventId}/seats/${myCurrentSeat}`), {
-                    status: 'taken', owner: name, timestamp: Date.now()
+                    status: 'taken', owner: name, timestamp: Date.now(), uid: currentUser.uid
                 });
+                // 2. Save to User History
+                saveToHistory(name, myCurrentSeat);
+                // 3. Send to Sheet
                 sendToSheet(name, myCurrentSeat);
             } else {
-                // General Booking with Transaction
                 const countRef = ref(db, `events/${eventId}/bookedCount`);
                 const limit = eventData.limit || 0;
                 runTransaction(countRef, (current) => {
@@ -339,11 +402,25 @@
                     if (limit > 0 && current >= limit) return; 
                     return current + 1;
                 }).then((result) => {
-                    if (result.committed) sendToSheet(name, "General Ticket");
+                    if (result.committed) {
+                        saveToHistory(name, "General Ticket");
+                        sendToSheet(name, "General Ticket");
+                    }
                     else { alert("บัตรหมดพอดี!"); hideForm(); }
                 });
             }
         };
+
+        function saveToHistory(name, seatDetail) {
+            const historyRef = push(ref(db, `users/${currentUser.uid}/history`));
+            set(historyRef, {
+                eventId: eventId,
+                eventName: eventData.name,
+                seat: seatDetail,
+                bookedAs: name,
+                timestamp: Date.now()
+            });
+        }
 
         function sendToSheet(name, seatDetail) {
             document.getElementById('bookingForm').innerHTML = "<p>กำลังบันทึกข้อมูล...</p>";
@@ -354,13 +431,50 @@
                 body: JSON.stringify({ name: name, seat: seatDetail, eventName: eventData.name })
             }).then(() => {
                 alert("จองสำเร็จ!");
-                window.location.reload(); // Reload เพื่อเคลียร์ค่า
+                window.location.reload(); 
             }).catch(err => {
                 console.error(err);
                 alert("บันทึกข้อมูลสำเร็จ (Connection Error)");
                 window.location.reload();
             });
         }
+
+        // ================= HISTORY MODAL =================
+        window.openHistory = () => {
+            document.getElementById('historyModal').classList.remove('hidden');
+            const listDiv = document.getElementById('historyList');
+            
+            if (!currentUser) return;
+
+            onValue(ref(db, `users/${currentUser.uid}/history`), (snapshot) => {
+                listDiv.innerHTML = "";
+                const data = snapshot.val();
+                
+                if (!data) {
+                    listDiv.innerHTML = "<p style='text-align:center; color:#999;'>ยังไม่มีประวัติการจอง</p>";
+                    return;
+                }
+
+                // เรียงจากใหม่ไปเก่า
+                const items = Object.values(data).reverse();
+                
+                items.forEach(item => {
+                    const date = new Date(item.timestamp).toLocaleString('th-TH');
+                    const div = document.createElement('div');
+                    div.className = 'history-item';
+                    div.innerHTML = `
+                        <strong>${item.eventName}</strong> <br>
+                        ที่นั่ง/ประเภท: <span style="color:#007bff">${item.seat}</span> <br>
+                        <span class="history-date">จองเมื่อ: ${date} | ชื่อผู้จอง: ${item.bookedAs}</span>
+                    `;
+                    listDiv.appendChild(div);
+                });
+            }, { onlyOnce: true });
+        };
+
+        window.closeHistory = () => {
+            document.getElementById('historyModal').classList.add('hidden');
+        };
     </script>
 </body>
 </html>

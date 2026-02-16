@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - จัดการอีเวนต์</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; background-color: #f4f4f4; }
+        h2 { border-bottom: 2px solid #333; padding-bottom: 10px; }
+        
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; }
+        
+        button { margin-top: 15px; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-danger { background-color: #dc3545; color: white; font-size: 12px; padding: 5px 10px; }
+        .btn-copy { background-color: #28a745; color: white; font-size: 12px; padding: 5px 10px; }
+
+        .hidden { display: none; }
+        
+        .event-list-item { border-bottom: 1px solid #eee; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; }
+        .event-info { flex-grow: 1; }
+    </style>
+</head>
+<body>
+
+    <h1>ผู้ดูแลระบบ (Admin)</h1>
+
+    <div class="card">
+        <h3>สร้างอีเวนต์ใหม่</h3>
+        <label>ชื่ออีเวนต์ / หนัง</label>
+        <input type="text" id="eventName" placeholder="เช่น Avengers รอบ 19:00">
+
+        <label>รูปแบบการจอง</label>
+        <select id="eventType" onchange="toggleForm()">
+            <option value="cinema">1. โรงภาพยนตร์ (ระบุที่นั่ง)</option>
+            <option value="general">2. อีเวนต์ทั่วไป (นับจำนวนบัตร)</option>
+        </select>
+
+        <div id="cinemaOptions">
+            <div style="display: flex; gap: 10px;">
+                <div style="flex:1">
+                    <label>จำนวนแถว (A, B, C...)</label>
+                    <input type="number" id="rowsVal" value="5" min="1" max="26">
+                </div>
+                <div style="flex:1">
+                    <label>จำนวนที่นั่งต่อแถว (1, 2, 3...)</label>
+                    <input type="number" id="colsVal" value="8" min="1">
+                </div>
+            </div>
+            <small style="color: #666;">*สูงสุด 26 แถว (A-Z)</small>
+        </div>
+
+        <div id="generalOptions" class="hidden">
+            <label>จำนวนบัตรสูงสุด (ใส่ 0 หากไม่จำกัด)</label>
+            <input type="number" id="limitVal" value="100">
+        </div>
+
+        <button class="btn-primary" onclick="createEvent()">สร้างอีเวนต์</button>
+    </div>
+
+    <div class="card">
+        <h3>รายการอีเวนต์ทั้งหมด</h3>
+        <div id="eventList">กำลังโหลด...</div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // --- แก้ไข Config ตรงนี้ ---
+        const firebaseConfig = {
+        apiKey: "AIzaSyCVrVE7okZklN4vmb32RSzsC7JdV7YmcVs",
+        authDomain: "oph-booking.firebaseapp.com",
+        databaseURL: "https://oph-booking-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "oph-booking",
+        storageBucket: "oph-booking.firebasestorage.app",
+        messagingSenderId: "222932745199",
+        appId: "1:222932745199:web:2f899a96964ab5a5f5141a"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // สลับฟอร์มตามประเภทที่เลือก
+        window.toggleForm = () => {
+            const type = document.getElementById('eventType').value;
+            if (type === 'cinema') {
+                document.getElementById('cinemaOptions').classList.remove('hidden');
+                document.getElementById('generalOptions').classList.add('hidden');
+            } else {
+                document.getElementById('cinemaOptions').classList.add('hidden');
+                document.getElementById('generalOptions').classList.remove('hidden');
+            }
+        }
+
+        // สร้างอีเวนต์
+        window.createEvent = () => {
+            const name = document.getElementById('eventName').value;
+            if(!name) return alert("กรุณาใส่ชื่ออีเวนต์");
+
+            const type = document.getElementById('eventType').value;
+            let eventData = {
+                name: name,
+                type: type,
+                createdAt: Date.now()
+            };
+
+            if (type === 'cinema') {
+                eventData.config = {
+                    rows: parseInt(document.getElementById('rowsVal').value),
+                    cols: parseInt(document.getElementById('colsVal').value)
+                };
+            } else {
+                eventData.limit = parseInt(document.getElementById('limitVal').value);
+                eventData.bookedCount = 0; // เริ่มต้นจองไปแล้ว 0
+            }
+
+            // Push ลง Firebase
+            push(ref(db, 'events'), eventData)
+                .then(() => {
+                    alert("สร้างเรียบร้อย!");
+                    document.getElementById('eventName').value = '';
+                })
+                .catch(err => alert(err.message));
+        };
+
+        // ลบอีเวนต์
+        window.deleteEvent = (key) => {
+            if(confirm("ต้องการลบอีเวนต์นี้ใช่ไหม? ข้อมูลการจองจะหายไปทั้งหมด")) {
+                remove(ref(db, 'events/' + key));
+            }
+        }
+
+        // Copy Link สำหรับลูกค้า
+        window.copyLink = (key) => {
+            // สมมติว่าไฟล์หน้าบ้านชื่อ index.html เราจะส่ง id ไปทาง URL
+            const url = window.location.href.replace('admin.html', 'index.html') + "?id=" + key;
+            navigator.clipboard.writeText(url).then(() => {
+                alert("คัดลอกลิงก์แล้ว: " + url);
+            });
+        }
+
+        // โหลดรายการอีเวนต์ Realtime
+        onValue(ref(db, 'events'), (snapshot) => {
+            const list = document.getElementById('eventList');
+            list.innerHTML = "";
+            
+            const data = snapshot.val();
+            if(!data) {
+                list.innerHTML = "<p>ยังไม่มีอีเวนต์</p>";
+                return;
+            }
+
+            Object.keys(data).forEach(key => {
+                const event = data[key];
+                const typeText = event.type === 'cinema' ? 'โรงหนัง' : 'ทั่วไป';
+                const detail = event.type === 'cinema' 
+                    ? `${event.config.rows} แถว x ${event.config.cols} ที่นั่ง`
+                    : `จำกัด ${event.limit === 0 ? 'ไม่จำกัด' : event.limit} ใบ`;
+
+                const div = document.createElement('div');
+                div.className = 'event-list-item';
+                div.innerHTML = `
+                    <div class="event-info">
+                        <strong>${event.name}</strong> <span style="font-size:0.8em; color:#666">(${typeText})</span><br>
+                        <small>${detail}</small>
+                    </div>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn-copy" onclick="copyLink('${key}')">Copy Link</button>
+                        <button class="btn-danger" onclick="deleteEvent('${key}')">ลบ</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        });
+
+    </script>
+</body>
+</html>

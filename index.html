@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจองตั๋ว Real-time</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; }
+        .screen { background: #333; color: white; padding: 10px; margin-bottom: 20px; }
+        .seat-container { display: grid; grid-template-columns: repeat(4, 50px); gap: 10px; justify-content: center; }
+        .seat {
+            width: 50px; height: 50px; background-color: #444; /* สีตั้งต้น (ยังไม่โหลด) */
+            border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white;
+        }
+        .seat.available { background-color: #28a745; /* เขียว = ว่าง */ }
+        .seat.taken { background-color: #dc3545; cursor: not-allowed; /* แดง = มีคนจอง */ }
+        .seat.selected { background-color: #ffc107; color: black; /* เหลือง = เราเลือก */ }
+        #bookingForm { margin-top: 20px; display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>จองตั๋วหนัง Real-time</h1>
+    <div class="screen">หน้าจอภาพยนตร์</div>
+    
+    <div class="seat-container" id="seatMap">
+        </div>
+
+    <div id="bookingForm">
+        <h3>คุณเลือกที่นั่ง: <span id="selectedSeatDisp"></span></h3>
+        <input type="text" id="userName" placeholder="ชื่อของคุณ" required>
+        <button onclick="confirmBooking()">ยืนยันการจอง</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // 1. ใส่ Firebase Config ที่ได้จาก Step 2
+        const firebaseConfig = {
+        apiKey: "AIzaSyCVrVE7okZklN4vmb32RSzsC7JdV7YmcVs",
+        authDomain: "oph-booking.firebaseapp.com",
+        databaseURL: "https://oph-booking-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "oph-booking",
+        storageBucket: "oph-booking.firebasestorage.app",
+        messagingSenderId: "222932745199",
+        appId: "1:222932745199:web:2f899a96964ab5a5f5141a"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // 2. ใส่ Web App URL ที่ได้จาก Step 1 (Google Apps Script)
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxdHa_9aRkfX9N5lz_lQr-2xdjm8jyrWY6vmM63ixfw3JSws8w2J8UglEs-bGnuU5wHFw/exec";
+
+        const seatsList = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4'];
+        const seatMap = document.getElementById('seatMap');
+        let currentSelection = null;
+
+        // เริ่มต้นสร้างที่นั่ง
+        seatsList.forEach(seatId => {
+            const div = document.createElement('div');
+            div.className = 'seat available';
+            div.innerText = seatId;
+            div.id = seatId;
+            div.onclick = () => selectSeat(seatId);
+            seatMap.appendChild(div);
+        });
+
+        // --- Realtime Listener: ฟังสถานะจาก Firebase ---
+        const seatsRef = ref(db, 'seats');
+        onValue(seatsRef, (snapshot) => {
+            const data = snapshot.val() || {};
+            seatsList.forEach(seatId => {
+                const el = document.getElementById(seatId);
+                // ถ้าใน DB บอกว่า taken ให้เป็นสีแดง
+                if (data[seatId] && data[seatId].status === 'taken') {
+                    el.className = 'seat taken';
+                } else if (currentSelection !== seatId) {
+                    el.className = 'seat available';
+                }
+            });
+        });
+
+        // --- ฟังก์ชันเลือกที่นั่ง ---
+        window.selectSeat = (seatId) => {
+            const el = document.getElementById(seatId);
+            if (el.classList.contains('taken')) return; // ถ้าจองแล้วห้ามกด
+
+            // เคลียร์การเลือกเก่า (ถ้ามี)
+            if (currentSelection) {
+                document.getElementById(currentSelection).classList.remove('selected');
+                document.getElementById(currentSelection).classList.add('available');
+            }
+
+            // เลือกที่นั่งใหม่
+            currentSelection = seatId;
+            el.classList.remove('available');
+            el.classList.add('selected');
+
+            document.getElementById('bookingForm').style.display = 'block';
+            document.getElementById('selectedSeatDisp').innerText = seatId;
+        };
+
+        // --- ฟังก์ชันกดยืนยัน ---
+        window.confirmBooking = () => {
+            const name = document.getElementById('userName').value;
+            if (!name) return alert("กรุณาใส่ชื่อ");
+
+            // 1. อัปเดต Firebase ทันที (ให้คนอื่นเห็นว่าเป็นสีแดง)
+            set(ref(db, 'seats/' + currentSelection), {
+                status: 'taken',
+                owner: name
+            });
+
+            // 2. ส่งข้อมูลไปเก็บใน Google Sheets
+            fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors', // สำคัญสำหรับ Google Script
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, seat: currentSelection })
+            }).then(() => {
+                alert("จองสำเร็จ!");
+                location.reload();
+            }).catch(err => console.error(err));
+        };
+    </script>
+</body>
+</html>

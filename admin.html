@@ -58,7 +58,7 @@
             <input type="number" id="limitVal" value="100">
         </div>
 
-        <button class="btn-primary" onclick="createEvent()">สร้างอีเวนต์</button>
+        <button class="btn-primary" onclick="createNewEvent()">สร้างอีเวนต์</button>
     </div>
 
     <div class="card">
@@ -97,7 +97,7 @@
         }
 
         // สร้างอีเวนต์
-        window.createEvent = () => {
+        window.createNewEvent = () => {
             const name = document.getElementById('eventName').value;
             if(!name) return alert("กรุณาใส่ชื่ออีเวนต์");
 

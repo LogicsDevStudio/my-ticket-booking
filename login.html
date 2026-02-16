@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เข้าสู่ระบบ - Booking System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0; }
+        .card { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; margin-top: 10px; }
+        .btn-primary { background: #007bff; color: white; }
+        .link { margin-top: 15px; font-size: 0.9rem; color: #007bff; cursor: pointer; text-decoration: underline; }
+        .error { color: red; font-size: 0.8rem; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2 id="formTitle">เข้าสู่ระบบ</h2>
+        <input type="email" id="email" placeholder="อีเมล">
+        <input type="password" id="password" placeholder="รหัสผ่าน (6 ตัวขึ้นไป)">
+        
+        <button class="btn-primary" onclick="handleAuth()" id="submitBtn">Login</button>
+        <p class="error" id="errorMsg"></p>
+
+        <div class="link" onclick="toggleMode()" id="toggleText">ยังไม่มีบัญชี? สมัครสมาชิก</div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // --- ใส่ Config เดิมของคุณ ---
+        const firebaseConfig = {
+        apiKey: "AIzaSyCVrVE7okZklN4vmb32RSzsC7JdV7YmcVs",
+        authDomain: "oph-booking.firebaseapp.com",
+        databaseURL: "https://oph-booking-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "oph-booking",
+        storageBucket: "oph-booking.firebasestorage.app",
+        messagingSenderId: "222932745199",
+        appId: "1:222932745199:web:2f899a96964ab5a5f5141a"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+
+        let isLoginMode = true;
+
+        window.toggleMode = () => {
+            isLoginMode = !isLoginMode;
+            document.getElementById('formTitle').innerText = isLoginMode ? "เข้าสู่ระบบ" : "สมัครสมาชิกใหม่";
+            document.getElementById('submitBtn').innerText = isLoginMode ? "Login" : "Register";
+            document.getElementById('toggleText').innerText = isLoginMode ? "ยังไม่มีบัญชี? สมัครสมาชิก" : "มีบัญชีแล้ว? เข้าสู่ระบบ";
+            document.getElementById('errorMsg').innerText = "";
+        };
+
+        window.handleAuth = () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (isLoginMode) {
+                // Login
+                signInWithEmailAndPassword(auth, email, password)
+                    .then((userCredential) => {
+                        // เช็ค Role ว่าเป็น Admin หรือ User (เดี๋ยวทำเพิ่มในไฟล์อื่น)
+                        // เบื้องต้นให้เด้งไปหน้า index ก่อน
+                        window.location.href = 'index.html';
+                    })
+                    .catch((error) => {
+                        document.getElementById('errorMsg').innerText = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+                    });
+            } else {
+                // Register
+                createUserWithEmailAndPassword(auth, email, password)
+                    .then((userCredential) => {
+                        const user = userCredential.user;
+                        // สร้าง User ใน Database พร้อม Role เริ่มต้นเป็น 'user'
+                        set(ref(db, 'users/' + user.uid), {
+                            email: email,
+                            role: 'user', // Default Role
+                            createdAt: Date.now()
+                        }).then(() => {
+                            alert("สมัครสมาชิกสำเร็จ!");
+                            window.location.href = 'index.html';
+                        });
+                    })
+                    .catch((error) => {
+                        document.getElementById('errorMsg').innerText = error.message;
+                    });
+            }
+        };
+    </script>
+</body>
+</html>

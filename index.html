@@ -3,61 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบจองตั๋ว Real-time (Locking)</title>
+    <title>ระบบจองตั๋ว Universal</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; }
-        .screen { background: #333; color: white; padding: 10px; margin-bottom: 20px; }
-        .seat-container { display: grid; grid-template-columns: repeat(4, 50px); gap: 10px; justify-content: center; }
+        body { font-family: 'Sarabun', sans-serif; text-align: center; padding: 20px; background-color: #f8f9fa; }
+        h1 { margin-bottom: 5px; }
+        h3 { color: #666; margin-top: 0; }
         
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        
+        /* UI สำหรับโรงหนัง */
+        .screen { background: #333; color: white; padding: 5px; margin: 15px 0; border-radius: 5px; font-size: 0.8rem; }
+        .seat-row { display: flex; justify-content: center; margin-bottom: 8px; gap: 8px; }
         .seat {
-            width: 50px; height: 50px; background-color: #ddd; 
-            border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: black; font-weight: bold;
-            transition: background-color 0.2s;
+            width: 40px; height: 40px; background-color: #e2e6ea; 
+            border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; 
+            font-size: 0.8rem; font-weight: bold; color: #495057;
+            transition: all 0.2s;
         }
-
-        /* 🟩 ว่าง */
+        .seat.available:hover { transform: scale(1.1); background-color: #dbeecd; }
+        
+        /* สถานะสี */
         .seat.available { background-color: #28a745; color: white; }
-        
-        /* 🟥 ขายแล้ว */
-        .seat.taken { background-color: #dc3545; color: white; cursor: not-allowed; }
-        
-        /* 🟧 คนอื่นกำลังเลือก (ห้ามกด) */
-        .seat.holding-other { background-color: #fd7e14; color: white; cursor: not-allowed; opacity: 0.6; }
+        .seat.taken { background-color: #dc3545; color: white; cursor: not-allowed; opacity: 0.5; }
+        .seat.holding-other { background-color: #fd7e14; color: white; cursor: not-allowed; opacity: 0.7; }
+        .seat.holding-me { background-color: #007bff; color: white; border: 2px solid #0056b3; box-shadow: 0 0 5px #007bff; }
 
-        /* 🟦 เรากำลังเลือก (กดจองได้) */
-        .seat.holding-me { background-color: #007bff; color: white; border: 3px solid #0056b3; }
+        /* UI สำหรับอีเวนต์ทั่วไป */
+        .general-box { padding: 40px; text-align: center; }
+        .counter { font-size: 3rem; font-weight: bold; color: #333; }
+        .limit-text { color: #666; font-size: 1rem; }
+        
+        /* ฟอร์มและปุ่ม */
+        #bookingForm { margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; display: none; }
+        input { padding: 10px; width: 70%; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px; }
+        button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; color: white; }
+        .btn-confirm { background-color: #007bff; width: 100%; }
+        .btn-cancel { background-color: #6c757d; margin-top: 10px; font-size: 0.9rem; background: none; color: #666; text-decoration: underline;}
 
-        #bookingForm { margin-top: 20px; display: none; }
-        .legend { margin-top: 20px; font-size: 0.8rem; }
-        .dot { width: 10px; height: 10px; display: inline-block; margin-right: 5px; }
+        .hidden { display: none !important; }
+        .loading { color: #666; margin-top: 20px; }
     </style>
 </head>
 <body>
 
-    <h1>จองตั๋วหนัง Real-time</h1>
-    <div class="screen">หน้าจอภาพยนตร์</div>
-    
-    <div class="seat-container" id="seatMap"></div>
+    <div class="container">
+        <div id="loading" class="loading">กำลังโหลดข้อมูลอีเวนต์...</div>
+        
+        <div id="content" class="hidden">
+            <h1 id="eventName">ชื่ออีเวนต์</h1>
+            <h3 id="eventTypeDisplay">รายละเอียด</h3>
 
-    <div class="legend">
-        <span class="dot" style="background:#28a745"></span>ว่าง 
-        <span class="dot" style="background:#007bff"></span>คุณเลือก 
-        <span class="dot" style="background:#fd7e14"></span>คนอื่นเลือกอยู่ 
-        <span class="dot" style="background:#dc3545"></span>ขายแล้ว
-    </div>
+            <div id="cinemaZone" class="hidden">
+                <div class="screen">หน้าจอภาพยนตร์</div>
+                <div id="seatMap"></div>
+                <div style="margin-top:10px; font-size:0.8rem; color:#666;">
+                    🟢 ว่าง | 🔵 คุณเลือก | 🟠 คนอื่นเลือก | 🔴 ขายแล้ว
+                </div>
+            </div>
 
-    <div id="bookingForm">
-        <h3>คุณกำลังเลือก: <span id="selectedSeatDisp"></span></h3>
-        <input type="text" id="userName" placeholder="ชื่อของคุณ" required>
-        <button onclick="confirmBooking()">ยืนยันการจอง</button>
-        <button onclick="cancelSelection()" style="background:#999">ยกเลิก</button>
+            <div id="generalZone" class="hidden">
+                <div class="general-box">
+                    <div class="limit-text">บัตรที่ขายไปแล้ว</div>
+                    <div id="counterDisplay" class="counter">0</div>
+                    <div id="limitDisplay" class="limit-text">จากทั้งหมด - ใบ</div>
+                    <button id="generalBookBtn" class="btn-confirm" style="margin-top: 20px; background:#28a745;">จองบัตรเลย</button>
+                </div>
+            </div>
+
+            <div id="bookingForm">
+                <p>คุณกำลังจอง: <strong><span id="selectedItemName"></span></strong></p>
+                <input type="text" id="userName" placeholder="กรอกชื่อ-นามสกุล ของคุณ" required>
+                <button onclick="confirmBooking()" class="btn-confirm">ยืนยันการจอง</button>
+                <button onclick="cancelAction()" class="btn-cancel">ยกเลิก</button>
+            </div>
+        </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, onValue, set, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, onValue, set, remove, onDisconnect, runTransaction, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // --- 1. ใส่ Config เดิมของคุณตรงนี้ ---
+        // --- 1. CONFIG: ใส่ค่าของคุณ ---
         const firebaseConfig = {
         apiKey: "AIzaSyCVrVE7okZklN4vmb32RSzsC7JdV7YmcVs",
         authDomain: "oph-booking.firebaseapp.com",
@@ -67,134 +93,247 @@
         messagingSenderId: "222932745199",
         appId: "1:222932745199:web:2f899a96964ab5a5f5141a"
         };
-
-        // --- 2. ใส่ URL Google Script เดิมของคุณตรงนี้ ---
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxdHa_9aRkfX9N5lz_lQr-2xdjm8jyrWY6vmM63ixfw3JSws8w2J8UglEs-bGnuU5wHFw/exec";
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxdHa_9aRkfX9N5lz_lQr-2xdjm8jyrWY6vmM63ixfw3JSws8w2J8UglEs-bGnuU5wHFw/exec"; 
+        // --------------------------------
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-
-        // สร้าง ID ประจำตัวคนใช้งาน (Session ID) เพื่อให้รู้ว่าใครเป็นใคร
         const mySessionId = 'user_' + Math.random().toString(36).substr(2, 9);
-        console.log("My ID:", mySessionId);
 
-        const seatsList = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4'];
-        const seatMap = document.getElementById('seatMap');
-        let myCurrentSeat = null; // เก็บว่าตอนนี้เราเลือกตัวไหนอยู่
+        // ดึง ID อีเวนต์จาก URL (?id=...)
+        const urlParams = new URLSearchParams(window.location.search);
+        const eventId = urlParams.get('id');
 
-        // สร้างที่นั่ง
-        seatsList.forEach(seatId => {
-            const div = document.createElement('div');
-            div.className = 'seat available';
-            div.innerText = seatId;
-            div.id = seatId;
-            div.onclick = () => selectSeat(seatId);
-            seatMap.appendChild(div);
-        });
+        let eventData = null;
+        let myCurrentSeat = null; // สำหรับ Cinema
 
-        // --- Realtime Listener: ฟังสถานะจาก Firebase ---
-        const seatsRef = ref(db, 'seats');
-        onValue(seatsRef, (snapshot) => {
-            const data = snapshot.val() || {};
+        // เริ่มต้นทำงาน
+        if (!eventId) {
+            document.body.innerHTML = "<h1>ไม่พบรหัสอีเวนต์</h1><p>กรุณาเข้าผ่านลิงก์ที่ถูกต้อง</p>";
+        } else {
+            loadEventData();
+        }
+
+        // โหลดข้อมูลอีเวนต์
+        function loadEventData() {
+            const eventRef = ref(db, 'events/' + eventId);
             
-            seatsList.forEach(seatId => {
-                const el = document.getElementById(seatId);
-                const seatData = data[seatId];
+            // ใช้ get() โหลดครั้งแรกเพื่อดู Config (ชื่อ, แถว, คอลัมน์)
+            // เราไม่ใช้ onValue ตรงนี้เพราะ Config ไม่ควรเปลี่ยนบ่อย และเพื่อป้องกันการ render ซ้ำ
+            get(eventRef).then((snapshot) => {
+                if (!snapshot.exists()) {
+                    alert("ไม่พบข้อมูลอีเวนต์นี้");
+                    return;
+                }
+                eventData = snapshot.val();
+                renderInterface();
+            });
+        }
 
-                // Reset class ก่อน
-                el.className = 'seat available';
+        function renderInterface() {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('content').classList.remove('hidden');
+            document.getElementById('eventName').innerText = eventData.name;
 
-                if (seatData) {
-                    if (seatData.status === 'taken') {
-                        // 1. ขายแล้ว -> สีแดง
-                        el.classList.add('taken');
-                    } else if (seatData.status === 'holding') {
-                        // 2. มีคนกำลังเลือกอยู่... เช็คว่าเป็นเรา หรือ คนอื่น?
-                        if (seatData.holder === mySessionId) {
-                            el.classList.add('holding-me'); // สีน้ำเงิน (เราเลือก)
-                            myCurrentSeat = seatId;
-                            showForm(seatId);
-                        } else {
-                            el.classList.add('holding-other'); // สีส้ม (คนอื่นเลือก)
+            if (eventData.type === 'cinema') {
+                setupCinema();
+            } else {
+                setupGeneral();
+            }
+        }
+
+        // ================= CINEMA LOGIC =================
+        function setupCinema() {
+            document.getElementById('cinemaZone').classList.remove('hidden');
+            document.getElementById('eventTypeDisplay').innerText = "เลือกที่นั่งที่ต้องการ";
+            
+            const rows = eventData.config.rows;
+            const cols = eventData.config.cols;
+            const mapDiv = document.getElementById('seatMap');
+            mapDiv.innerHTML = ''; // Clear old
+
+            // สร้าง Grid ที่นั่ง
+            for (let r = 0; r < rows; r++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'seat-row';
+                const rowLabel = String.fromCharCode(65 + r); // 0->A, 1->B
+
+                for (let c = 1; c <= cols; c++) {
+                    const seatId = rowLabel + c;
+                    const seatDiv = document.createElement('div');
+                    seatDiv.className = 'seat available';
+                    seatDiv.innerText = seatId;
+                    seatDiv.id = seatId;
+                    seatDiv.onclick = () => selectSeatCinema(seatId);
+                    rowDiv.appendChild(seatDiv);
+                }
+                mapDiv.appendChild(rowDiv);
+            }
+
+            // Realtime Listener เฉพาะที่นั่งของอีเวนต์นี้
+            onValue(ref(db, `events/${eventId}/seats`), (snapshot) => {
+                const seatsData = snapshot.val() || {};
+                // Loop อัปเดตสถานะทุกปุ่ม
+                document.querySelectorAll('.seat').forEach(el => {
+                    const sId = el.id;
+                    const sData = seatsData[sId];
+
+                    el.className = 'seat available'; // Reset
+                    if (sData) {
+                        if (sData.status === 'taken') el.classList.add('taken');
+                        else if (sData.status === 'holding') {
+                            if (sData.holder === mySessionId) {
+                                el.classList.add('holding-me');
+                                myCurrentSeat = sId;
+                                showForm(sId); // Show form if reloaded/connected
+                            } else {
+                                el.classList.add('holding-other');
+                            }
                         }
                     }
+                });
+            });
+        }
+
+        window.selectSeatCinema = (seatId) => {
+            const el = document.getElementById(seatId);
+            if (el.classList.contains('taken') || el.classList.contains('holding-other')) return;
+
+            if (seatId === myCurrentSeat) {
+                cancelAction(); // กดซ้ำ = ยกเลิก
+                return;
+            }
+
+            // ลบตัวเก่าถ้ามี
+            if (myCurrentSeat) remove(ref(db, `events/${eventId}/seats/${myCurrentSeat}`));
+
+            // จองตัวใหม่
+            const seatRef = ref(db, `events/${eventId}/seats/${seatId}`);
+            set(seatRef, { status: 'holding', holder: mySessionId, timestamp: Date.now() });
+            onDisconnect(seatRef).remove();
+        };
+
+        // ================= GENERAL EVENT LOGIC =================
+        function setupGeneral() {
+            document.getElementById('generalZone').classList.remove('hidden');
+            const limit = eventData.limit || 0;
+            const limitText = limit === 0 ? "ไม่จำกัดจำนวน" : `จำกัด ${limit} ใบ`;
+            document.getElementById('limitDisplay').innerText = limitText;
+
+            // Realtime Listener นับจำนวน
+            onValue(ref(db, `events/${eventId}/bookedCount`), (snapshot) => {
+                const count = snapshot.val() || 0;
+                document.getElementById('counterDisplay').innerText = count;
+
+                // เช็คว่าเต็มยัง (ถ้ามี Limit)
+                if (limit > 0 && count >= limit) {
+                    document.getElementById('generalBookBtn').disabled = true;
+                    document.getElementById('generalBookBtn').innerText = "บัตรหมดแล้ว";
+                    document.getElementById('generalBookBtn').style.background = "#ccc";
+                    hideForm();
+                } else {
+                    document.getElementById('generalBookBtn').disabled = false;
+                    document.getElementById('generalBookBtn').innerText = "จองบัตรเลย";
+                    document.getElementById('generalBookBtn').style.background = "#28a745";
                 }
             });
-        });
 
-        // --- ฟังก์ชันเมื่อคลิกเลือกที่นั่ง ---
-        window.selectSeat = (seatId) => {
-            const el = document.getElementById(seatId);
-            
-            // ถ้าที่นั่งไม่ว่าง (แดง หรือ ส้ม) กดไม่ได้
-            if (el.classList.contains('taken') || el.classList.contains('holding-other')) {
-                return;
-            }
+            // ปุ่มกดจอง (แค่โชว์ฟอร์ม ยังไม่ตัดยอด)
+            document.getElementById('generalBookBtn').onclick = () => {
+                showForm("บัตรเข้าร่วมงาน");
+            };
+        }
 
-            // ถ้ากดที่นั่งเดิมที่เลือกอยู่แล้ว -> ถือว่ายกเลิก
-            if (seatId === myCurrentSeat) {
-                cancelSelection();
-                return;
-            }
+        // ================= SHARED FUNCTIONS =================
+        function showForm(itemName) {
+            document.getElementById('bookingForm').style.display = 'block';
+            document.getElementById('selectedItemName').innerText = itemName;
+            // Scroll ลงมาที่ฟอร์ม
+            document.getElementById('bookingForm').scrollIntoView({behavior: 'smooth'});
+        }
 
-            // ถ้าเคยเลือกตัวอื่นอยู่ ให้ปลดตัวเก่าออกก่อน (เลือกได้ทีละ 1 ที่)
-            if (myCurrentSeat) {
-                remove(ref(db, 'seats/' + myCurrentSeat));
-            }
+        function hideForm() {
+            document.getElementById('bookingForm').style.display = 'none';
+            document.getElementById('userName').value = '';
+        }
 
-            // จองสิทธิ์ที่นั่งใหม่ (เขียนลง Firebase ทันที)
-            // ใช้ onDisconnect().remove() เพื่อกันกรณีเน็ตหลุด/ปิดจอ ให้คืนสิทธิ์ทันที
-            const seatRef = ref(db, 'seats/' + seatId);
-            set(seatRef, {
-                status: 'holding',
-                holder: mySessionId,
-                timestamp: Date.now()
-            });
-            onDisconnect(seatRef).remove(); // *สำคัญ* ถ้าปิดจอ ให้ลบข้อมูล holding ออก
-        };
-
-        // --- ฟังก์ชันยกเลิกการเลือก ---
-        window.cancelSelection = () => {
-            if (myCurrentSeat) {
-                remove(ref(db, 'seats/' + myCurrentSeat)); // ลบออกจาก Firebase
+        window.cancelAction = () => {
+            if (eventData.type === 'cinema' && myCurrentSeat) {
+                remove(ref(db, `events/${eventId}/seats/${myCurrentSeat}`));
                 myCurrentSeat = null;
-                document.getElementById('bookingForm').style.display = 'none';
+            }
+            hideForm();
+        };
+
+        window.confirmBooking = () => {
+            const name = document.getElementById('userName').value.trim();
+            if (!name) return alert("กรุณากรอกชื่อ");
+
+            if (eventData.type === 'cinema') {
+                confirmCinema(name);
+            } else {
+                confirmGeneral(name);
             }
         };
 
-        // --- ฟังก์ชันยืนยันการจอง ---
-        window.confirmBooking = () => {
-            const name = document.getElementById('userName').value;
-            if (!name) return alert("กรุณาใส่ชื่อ");
+        // ยืนยัน Cinema
+        function confirmCinema(name) {
             if (!myCurrentSeat) return;
-
-            const seatToBook = myCurrentSeat; // จำค่าไว้ก่อน
-
-            // 1. เปลี่ยนสถานะใน Firebase เป็น taken (ถาวร)
-            set(ref(db, 'seats/' + seatToBook), {
-                status: 'taken',
-                owner: name,
-                timestamp: Date.now()
+            const seatId = myCurrentSeat;
+            
+            // 1. Firebase Update
+            set(ref(db, `events/${eventId}/seats/${seatId}`), {
+                status: 'taken', owner: name, timestamp: Date.now()
             });
 
-            // 2. ส่งข้อมูลเข้า Google Sheets
+            // 2. Send to Sheets
+            sendToSheet(name, seatId);
+        }
+
+        // ยืนยัน General
+        function confirmGeneral(name) {
+            const countRef = ref(db, `events/${eventId}/bookedCount`);
+            const limit = eventData.limit || 0;
+
+            // Transaction: ป้องกันการแย่งกันกดวินาทีสุดท้าย
+            runTransaction(countRef, (currentCount) => {
+                currentCount = currentCount || 0;
+                if (limit > 0 && currentCount >= limit) {
+                    return; // Abort transaction (เต็มแล้ว)
+                }
+                return currentCount + 1; // เพิ่มค่า
+            }).then((result) => {
+                if (result.committed) {
+                    // จองสำเร็จ -> ส่งเข้า Sheet
+                    sendToSheet(name, "General Ticket");
+                } else {
+                    alert("เสียใจด้วย บัตรหมดพอดี!");
+                    hideForm();
+                }
+            });
+        }
+
+        function sendToSheet(name, seatDetail) {
+            // ปิด UI ให้รู้ว่ากำลังโหลด
+            document.getElementById('bookingForm').innerHTML = "<p>กำลังบันทึกข้อมูล...</p>";
+
             fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name, seat: seatToBook })
+                body: JSON.stringify({ 
+                    name: name, 
+                    seat: seatDetail, 
+                    eventName: eventData.name // ส่งชื่อ Event ไปด้วย
+                })
             }).then(() => {
-                alert("จองสำเร็จ!");
-                // รีเซ็ตฟอร์ม (ไม่ต้อง reload หน้าเว็บก็ได้ เพราะ Firebase อัปเดตแล้ว)
-                document.getElementById('userName').value = '';
-                document.getElementById('bookingForm').style.display = 'none';
-                myCurrentSeat = null;
-            }).catch(err => console.error(err));
-        };
-
-        function showForm(seatId) {
-            document.getElementById('bookingForm').style.display = 'block';
-            document.getElementById('selectedSeatDisp').innerText = seatId;
+                alert("จองสำเร็จเรียบร้อย!");
+                location.reload();
+            }).catch(err => {
+                console.error(err);
+                alert("บันทึกสำเร็จ (แต่การเชื่อมต่อ Sheet มีปัญหา)");
+                location.reload();
+            });
         }
     </script>
 </body>

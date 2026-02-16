@@ -3,19 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบจองตั๋ว Real-time</title>
+    <title>ระบบจองตั๋ว Real-time (Locking)</title>
     <style>
         body { font-family: sans-serif; text-align: center; padding: 20px; }
         .screen { background: #333; color: white; padding: 10px; margin-bottom: 20px; }
         .seat-container { display: grid; grid-template-columns: repeat(4, 50px); gap: 10px; justify-content: center; }
+        
         .seat {
-            width: 50px; height: 50px; background-color: #444; /* สีตั้งต้น (ยังไม่โหลด) */
-            border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white;
+            width: 50px; height: 50px; background-color: #ddd; 
+            border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: black; font-weight: bold;
+            transition: background-color 0.2s;
         }
-        .seat.available { background-color: #28a745; /* เขียว = ว่าง */ }
-        .seat.taken { background-color: #dc3545; cursor: not-allowed; /* แดง = มีคนจอง */ }
-        .seat.selected { background-color: #ffc107; color: black; /* เหลือง = เราเลือก */ }
+
+        /* 🟩 ว่าง */
+        .seat.available { background-color: #28a745; color: white; }
+        
+        /* 🟥 ขายแล้ว */
+        .seat.taken { background-color: #dc3545; color: white; cursor: not-allowed; }
+        
+        /* 🟧 คนอื่นกำลังเลือก (ห้ามกด) */
+        .seat.holding-other { background-color: #fd7e14; color: white; cursor: not-allowed; opacity: 0.6; }
+
+        /* 🟦 เรากำลังเลือก (กดจองได้) */
+        .seat.holding-me { background-color: #007bff; color: white; border: 3px solid #0056b3; }
+
         #bookingForm { margin-top: 20px; display: none; }
+        .legend { margin-top: 20px; font-size: 0.8rem; }
+        .dot { width: 10px; height: 10px; display: inline-block; margin-right: 5px; }
     </style>
 </head>
 <body>
@@ -23,20 +37,27 @@
     <h1>จองตั๋วหนัง Real-time</h1>
     <div class="screen">หน้าจอภาพยนตร์</div>
     
-    <div class="seat-container" id="seatMap">
-        </div>
+    <div class="seat-container" id="seatMap"></div>
+
+    <div class="legend">
+        <span class="dot" style="background:#28a745"></span>ว่าง 
+        <span class="dot" style="background:#007bff"></span>คุณเลือก 
+        <span class="dot" style="background:#fd7e14"></span>คนอื่นเลือกอยู่ 
+        <span class="dot" style="background:#dc3545"></span>ขายแล้ว
+    </div>
 
     <div id="bookingForm">
-        <h3>คุณเลือกที่นั่ง: <span id="selectedSeatDisp"></span></h3>
+        <h3>คุณกำลังเลือก: <span id="selectedSeatDisp"></span></h3>
         <input type="text" id="userName" placeholder="ชื่อของคุณ" required>
         <button onclick="confirmBooking()">ยืนยันการจอง</button>
+        <button onclick="cancelSelection()" style="background:#999">ยกเลิก</button>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, onValue, set, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // 1. ใส่ Firebase Config ที่ได้จาก Step 2
+        // --- 1. ใส่ Config เดิมของคุณตรงนี้ ---
         const firebaseConfig = {
         apiKey: "AIzaSyCVrVE7okZklN4vmb32RSzsC7JdV7YmcVs",
         authDomain: "oph-booking.firebaseapp.com",
@@ -47,17 +68,21 @@
         appId: "1:222932745199:web:2f899a96964ab5a5f5141a"
         };
 
+        // --- 2. ใส่ URL Google Script เดิมของคุณตรงนี้ ---
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxdHa_9aRkfX9N5lz_lQr-2xdjm8jyrWY6vmM63ixfw3JSws8w2J8UglEs-bGnuU5wHFw/exec";
+
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // 2. ใส่ Web App URL ที่ได้จาก Step 1 (Google Apps Script)
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxdHa_9aRkfX9N5lz_lQr-2xdjm8jyrWY6vmM63ixfw3JSws8w2J8UglEs-bGnuU5wHFw/exec";
+        // สร้าง ID ประจำตัวคนใช้งาน (Session ID) เพื่อให้รู้ว่าใครเป็นใคร
+        const mySessionId = 'user_' + Math.random().toString(36).substr(2, 9);
+        console.log("My ID:", mySessionId);
 
         const seatsList = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4'];
         const seatMap = document.getElementById('seatMap');
-        let currentSelection = null;
+        let myCurrentSeat = null; // เก็บว่าตอนนี้เราเลือกตัวไหนอยู่
 
-        // เริ่มต้นสร้างที่นั่ง
+        // สร้างที่นั่ง
         seatsList.forEach(seatId => {
             const div = document.createElement('div');
             div.className = 'seat available';
@@ -71,59 +96,106 @@
         const seatsRef = ref(db, 'seats');
         onValue(seatsRef, (snapshot) => {
             const data = snapshot.val() || {};
+            
             seatsList.forEach(seatId => {
                 const el = document.getElementById(seatId);
-                // ถ้าใน DB บอกว่า taken ให้เป็นสีแดง
-                if (data[seatId] && data[seatId].status === 'taken') {
-                    el.className = 'seat taken';
-                } else if (currentSelection !== seatId) {
-                    el.className = 'seat available';
+                const seatData = data[seatId];
+
+                // Reset class ก่อน
+                el.className = 'seat available';
+
+                if (seatData) {
+                    if (seatData.status === 'taken') {
+                        // 1. ขายแล้ว -> สีแดง
+                        el.classList.add('taken');
+                    } else if (seatData.status === 'holding') {
+                        // 2. มีคนกำลังเลือกอยู่... เช็คว่าเป็นเรา หรือ คนอื่น?
+                        if (seatData.holder === mySessionId) {
+                            el.classList.add('holding-me'); // สีน้ำเงิน (เราเลือก)
+                            myCurrentSeat = seatId;
+                            showForm(seatId);
+                        } else {
+                            el.classList.add('holding-other'); // สีส้ม (คนอื่นเลือก)
+                        }
+                    }
                 }
             });
         });
 
-        // --- ฟังก์ชันเลือกที่นั่ง ---
+        // --- ฟังก์ชันเมื่อคลิกเลือกที่นั่ง ---
         window.selectSeat = (seatId) => {
             const el = document.getElementById(seatId);
-            if (el.classList.contains('taken')) return; // ถ้าจองแล้วห้ามกด
-
-            // เคลียร์การเลือกเก่า (ถ้ามี)
-            if (currentSelection) {
-                document.getElementById(currentSelection).classList.remove('selected');
-                document.getElementById(currentSelection).classList.add('available');
+            
+            // ถ้าที่นั่งไม่ว่าง (แดง หรือ ส้ม) กดไม่ได้
+            if (el.classList.contains('taken') || el.classList.contains('holding-other')) {
+                return;
             }
 
-            // เลือกที่นั่งใหม่
-            currentSelection = seatId;
-            el.classList.remove('available');
-            el.classList.add('selected');
+            // ถ้ากดที่นั่งเดิมที่เลือกอยู่แล้ว -> ถือว่ายกเลิก
+            if (seatId === myCurrentSeat) {
+                cancelSelection();
+                return;
+            }
 
-            document.getElementById('bookingForm').style.display = 'block';
-            document.getElementById('selectedSeatDisp').innerText = seatId;
+            // ถ้าเคยเลือกตัวอื่นอยู่ ให้ปลดตัวเก่าออกก่อน (เลือกได้ทีละ 1 ที่)
+            if (myCurrentSeat) {
+                remove(ref(db, 'seats/' + myCurrentSeat));
+            }
+
+            // จองสิทธิ์ที่นั่งใหม่ (เขียนลง Firebase ทันที)
+            // ใช้ onDisconnect().remove() เพื่อกันกรณีเน็ตหลุด/ปิดจอ ให้คืนสิทธิ์ทันที
+            const seatRef = ref(db, 'seats/' + seatId);
+            set(seatRef, {
+                status: 'holding',
+                holder: mySessionId,
+                timestamp: Date.now()
+            });
+            onDisconnect(seatRef).remove(); // *สำคัญ* ถ้าปิดจอ ให้ลบข้อมูล holding ออก
         };
 
-        // --- ฟังก์ชันกดยืนยัน ---
+        // --- ฟังก์ชันยกเลิกการเลือก ---
+        window.cancelSelection = () => {
+            if (myCurrentSeat) {
+                remove(ref(db, 'seats/' + myCurrentSeat)); // ลบออกจาก Firebase
+                myCurrentSeat = null;
+                document.getElementById('bookingForm').style.display = 'none';
+            }
+        };
+
+        // --- ฟังก์ชันยืนยันการจอง ---
         window.confirmBooking = () => {
             const name = document.getElementById('userName').value;
             if (!name) return alert("กรุณาใส่ชื่อ");
+            if (!myCurrentSeat) return;
 
-            // 1. อัปเดต Firebase ทันที (ให้คนอื่นเห็นว่าเป็นสีแดง)
-            set(ref(db, 'seats/' + currentSelection), {
+            const seatToBook = myCurrentSeat; // จำค่าไว้ก่อน
+
+            // 1. เปลี่ยนสถานะใน Firebase เป็น taken (ถาวร)
+            set(ref(db, 'seats/' + seatToBook), {
                 status: 'taken',
-                owner: name
+                owner: name,
+                timestamp: Date.now()
             });
 
-            // 2. ส่งข้อมูลไปเก็บใน Google Sheets
+            // 2. ส่งข้อมูลเข้า Google Sheets
             fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
-                mode: 'no-cors', // สำคัญสำหรับ Google Script
+                mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name, seat: currentSelection })
+                body: JSON.stringify({ name: name, seat: seatToBook })
             }).then(() => {
                 alert("จองสำเร็จ!");
-                location.reload();
+                // รีเซ็ตฟอร์ม (ไม่ต้อง reload หน้าเว็บก็ได้ เพราะ Firebase อัปเดตแล้ว)
+                document.getElementById('userName').value = '';
+                document.getElementById('bookingForm').style.display = 'none';
+                myCurrentSeat = null;
             }).catch(err => console.error(err));
         };
+
+        function showForm(seatId) {
+            document.getElementById('bookingForm').style.display = 'block';
+            document.getElementById('selectedSeatDisp').innerText = seatId;
+        }
     </script>
 </body>
 </html>

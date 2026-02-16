@@ -4,85 +4,149 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - จัดการอีเวนต์</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; background-color: #f4f4f4; }
-        h2 { border-bottom: 2px solid #333; padding-bottom: 10px; }
+        body { font-family: 'Sarabun', sans-serif; background-color: #f4f6f8; margin: 0; padding: 0; color: #333; }
         
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        
-        label { display: block; margin-top: 10px; font-weight: bold; }
-        input, select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; }
-        
-        button { margin-top: 15px; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
-        .btn-primary { background-color: #007bff; color: white; }
-        .btn-danger { background-color: #dc3545; color: white; font-size: 12px; padding: 5px 10px; }
-        .btn-copy { background-color: #28a745; color: white; font-size: 12px; padding: 5px 10px; }
+        /* Navbar */
+        .navbar { background: #343a40; padding: 15px 20px; color: white; display: flex; justify-content: space-between; align-items: center; }
+        .nav-title { font-size: 1.2rem; font-weight: bold; }
+        .btn-nav { background: #495057; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; margin-left: 10px; font-size: 0.9rem; }
+        .btn-nav:hover { background: #6c757d; }
+        .btn-logout { background: #dc3545; }
+        .btn-logout:hover { background: #c82333; }
 
-        .hidden { display: none; }
+        .container { max-width: 800px; margin: 20px auto; padding: 0 15px; }
+
+        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h3 { margin-top: 0; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
         
-        .event-list-item { border-bottom: 1px solid #eee; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; }
+        label { display: block; margin-top: 15px; font-weight: bold; font-size: 0.9rem; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 5px; font-family: inherit; }
+        
+        button { margin-top: 20px; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-family: inherit; }
+        .btn-primary { background-color: #007bff; color: white; width: 100%; }
+        .btn-primary:hover { background-color: #0069d9; }
+
+        .btn-danger { background-color: #dc3545; color: white; font-size: 14px; padding: 5px 10px; margin-top: 0; }
+        .btn-copy { background-color: #28a745; color: white; font-size: 14px; padding: 5px 10px; margin-top: 0; }
+
+        .hidden { display: none !important; }
+        
+        .event-list-item { border-bottom: 1px solid #eee; padding: 15px 0; display: flex; justify-content: space-between; align-items: center; }
         .event-info { flex-grow: 1; }
+        .loader { text-align: center; padding: 50px; font-size: 1.2rem; color: #666; }
     </style>
 </head>
 <body>
 
-    <h1>ผู้ดูแลระบบ (Admin)</h1>
-
-    <div class="card">
-        <h3>สร้างอีเวนต์ใหม่</h3>
-        <label>ชื่ออีเวนต์ / หนัง</label>
-        <input type="text" id="eventName" placeholder="เช่น Avengers รอบ 19:00">
-
-        <label>รูปแบบการจอง</label>
-        <select id="eventType" onchange="toggleForm()">
-            <option value="cinema">1. โรงภาพยนตร์ (ระบุที่นั่ง)</option>
-            <option value="general">2. อีเวนต์ทั่วไป (นับจำนวนบัตร)</option>
-        </select>
-
-        <div id="cinemaOptions">
-            <div style="display: flex; gap: 10px;">
-                <div style="flex:1">
-                    <label>จำนวนแถว (A, B, C...)</label>
-                    <input type="number" id="rowsVal" value="5" min="1" max="26">
-                </div>
-                <div style="flex:1">
-                    <label>จำนวนที่นั่งต่อแถว (1, 2, 3...)</label>
-                    <input type="number" id="colsVal" value="8" min="1">
-                </div>
-            </div>
-            <small style="color: #666;">*สูงสุด 26 แถว (A-Z)</small>
-        </div>
-
-        <div id="generalOptions" class="hidden">
-            <label>จำนวนบัตรสูงสุด (ใส่ 0 หากไม่จำกัด)</label>
-            <input type="number" id="limitVal" value="100">
-        </div>
-
-        <button class="btn-primary" onclick="createNewEvent()">สร้างอีเวนต์</button>
+    <div id="loadingScreen" class="loader">
+        กำลังตรวจสอบสิทธิ์ Admin...
     </div>
 
-    <div class="card">
-        <h3>รายการอีเวนต์ทั้งหมด</h3>
-        <div id="eventList">กำลังโหลด...</div>
+    <div id="adminContent" class="hidden">
+        <nav class="navbar">
+            <div class="nav-title">🔒 Admin Panel</div>
+            <div>
+                <button onclick="window.location.href='index.html'" class="btn-nav">ไปยังหน้าบ้าน</button>
+                <button onclick="logout()" class="btn-nav btn-logout">ออกจากระบบ</button>
+            </div>
+        </nav>
+
+        <div class="container">
+            <div class="card">
+                <h3>สร้างอีเวนต์ใหม่</h3>
+                <label>ชื่ออีเวนต์ / หนัง</label>
+                <input type="text" id="eventName" placeholder="เช่น Avengers รอบ 19:00">
+
+                <label>รูปแบบการจอง</label>
+                <select id="eventType" onchange="toggleForm()">
+                    <option value="cinema">1. โรงภาพยนตร์ (ระบุที่นั่ง)</option>
+                    <option value="general">2. อีเวนต์ทั่วไป (นับจำนวนบัตร)</option>
+                </select>
+
+                <div id="cinemaOptions">
+                    <div style="display: flex; gap: 10px;">
+                        <div style="flex:1">
+                            <label>จำนวนแถว (A, B, C...)</label>
+                            <input type="number" id="rowsVal" value="5" min="1" max="26">
+                        </div>
+                        <div style="flex:1">
+                            <label>จำนวนที่นั่งต่อแถว (1, 2, 3...)</label>
+                            <input type="number" id="colsVal" value="8" min="1">
+                        </div>
+                    </div>
+                    <small style="color: #666; display:block; margin-top:5px;">*สูงสุด 26 แถว (A-Z)</small>
+                </div>
+
+                <div id="generalOptions" class="hidden">
+                    <label>จำนวนบัตรสูงสุด (ใส่ 0 หากไม่จำกัด)</label>
+                    <input type="number" id="limitVal" value="100">
+                </div>
+
+                <button class="btn-primary" onclick="createNewEvent()">สร้างอีเวนต์</button>
+            </div>
+
+            <div class="card">
+                <h3>รายการอีเวนต์ทั้งหมด</h3>
+                <div id="eventList">กำลังโหลด...</div>
+            </div>
+        </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, push, onValue, remove, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // --- แก้ไข Config ตรงนี้ ---
+        // --- Config ---
         const firebaseConfig = {
-        apiKey: "AIzaSyCVrVE7okZklN4vmb32RSzsC7JdV7YmcVs",
-        authDomain: "oph-booking.firebaseapp.com",
-        databaseURL: "https://oph-booking-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "oph-booking",
-        storageBucket: "oph-booking.firebasestorage.app",
-        messagingSenderId: "222932745199",
-        appId: "1:222932745199:web:2f899a96964ab5a5f5141a"
+            apiKey: "AIzaSyCVrVE7okZklN4vmb32RSzsC7JdV7YmcVs",
+            authDomain: "oph-booking.firebaseapp.com",
+            databaseURL: "https://oph-booking-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "oph-booking",
+            storageBucket: "oph-booking.firebasestorage.app",
+            messagingSenderId: "222932745199",
+            appId: "1:222932745199:web:2f899a96964ab5a5f5141a"
         };
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
+        const auth = getAuth(app);
+
+        // ================= SECURITY CHECK =================
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // ล็อกอินแล้ว -> เช็คว่าเป็น Admin หรือไม่?
+                get(ref(db, 'users/' + user.uid + '/role')).then((snapshot) => {
+                    const role = snapshot.val();
+                    if (role === 'admin') {
+                        // ผ่าน: แสดงหน้า Admin
+                        document.getElementById('loadingScreen').classList.add('hidden');
+                        document.getElementById('adminContent').classList.remove('hidden');
+                        loadEvents(); // เริ่มโหลดข้อมูล
+                    } else {
+                        // ไม่ผ่าน: เป็น User ธรรมดา
+                        alert("คุณไม่มีสิทธิ์เข้าถึงหน้านี้");
+                        window.location.href = 'index.html';
+                    }
+                }).catch((err) => {
+                    console.error(err);
+                    window.location.href = 'index.html';
+                });
+            } else {
+                // ยังไม่ล็อกอิน
+                window.location.href = 'login.html';
+            }
+        });
+
+        window.logout = () => {
+            if(confirm("ต้องการออกจากระบบใช่ไหม?")) {
+                signOut(auth).then(() => window.location.href = 'login.html');
+            }
+        };
+
+        // ================= ADMIN FUNCTIONS =================
 
         // สลับฟอร์มตามประเภทที่เลือก
         window.toggleForm = () => {
@@ -115,10 +179,9 @@
                 };
             } else {
                 eventData.limit = parseInt(document.getElementById('limitVal').value);
-                eventData.bookedCount = 0; // เริ่มต้นจองไปแล้ว 0
+                eventData.bookedCount = 0;
             }
 
-            // Push ลง Firebase
             push(ref(db, 'events'), eventData)
                 .then(() => {
                     alert("สร้างเรียบร้อย!");
@@ -134,48 +197,55 @@
             }
         }
 
-        // Copy Link สำหรับลูกค้า
+        // Copy Link
         window.copyLink = (key) => {
-            // สมมติว่าไฟล์หน้าบ้านชื่อ index.html เราจะส่ง id ไปทาง URL
-            const url = window.location.href.replace('admin.html', 'index.html') + "?id=" + key;
+            // สร้าง URL แบบเต็มเพื่อส่งให้ลูกค้า
+            const baseUrl = window.location.origin + window.location.pathname.replace('admin.html', 'index.html');
+            const url = `${baseUrl}?id=${key}`;
+            
             navigator.clipboard.writeText(url).then(() => {
-                alert("คัดลอกลิงก์แล้ว: " + url);
+                alert("คัดลอกลิงก์แล้ว: \n" + url);
             });
         }
 
-        // โหลดรายการอีเวนต์ Realtime
-        onValue(ref(db, 'events'), (snapshot) => {
-            const list = document.getElementById('eventList');
-            list.innerHTML = "";
-            
-            const data = snapshot.val();
-            if(!data) {
-                list.innerHTML = "<p>ยังไม่มีอีเวนต์</p>";
-                return;
-            }
+        // โหลดรายการอีเวนต์ Realtime (เรียกใช้หลังจากเช็คสิทธิ์ผ่านแล้ว)
+        function loadEvents() {
+            onValue(ref(db, 'events'), (snapshot) => {
+                const list = document.getElementById('eventList');
+                list.innerHTML = "";
+                
+                const data = snapshot.val();
+                if(!data) {
+                    list.innerHTML = "<p style='text-align:center; color:#999;'>ยังไม่มีอีเวนต์ที่สร้างไว้</p>";
+                    return;
+                }
 
-            Object.keys(data).forEach(key => {
-                const event = data[key];
-                const typeText = event.type === 'cinema' ? 'โรงหนัง' : 'ทั่วไป';
-                const detail = event.type === 'cinema' 
-                    ? `${event.config.rows} แถว x ${event.config.cols} ที่นั่ง`
-                    : `จำกัด ${event.limit === 0 ? 'ไม่จำกัด' : event.limit} ใบ`;
+                // เรียงลำดับจากใหม่ไปเก่า
+                const keys = Object.keys(data).reverse();
 
-                const div = document.createElement('div');
-                div.className = 'event-list-item';
-                div.innerHTML = `
-                    <div class="event-info">
-                        <strong>${event.name}</strong> <span style="font-size:0.8em; color:#666">(${typeText})</span><br>
-                        <small>${detail}</small>
-                    </div>
-                    <div style="display:flex; gap:5px;">
-                        <button class="btn-copy" onclick="copyLink('${key}')">Copy Link</button>
-                        <button class="btn-danger" onclick="deleteEvent('${key}')">ลบ</button>
-                    </div>
-                `;
-                list.appendChild(div);
+                keys.forEach(key => {
+                    const event = data[key];
+                    const typeText = event.type === 'cinema' ? '🎬 โรงหนัง' : '🎫 ทั่วไป';
+                    const detail = event.type === 'cinema' 
+                        ? `${event.config.rows} แถว x ${event.config.cols} ที่นั่ง`
+                        : `จำกัด ${event.limit === 0 ? 'ไม่จำกัด' : event.limit} ใบ`;
+
+                    const div = document.createElement('div');
+                    div.className = 'event-list-item';
+                    div.innerHTML = `
+                        <div class="event-info">
+                            <strong>${event.name}</strong> <span style="font-size:0.85em; color:#007bff; background:#e3f2fd; padding:2px 6px; border-radius:4px;">${typeText}</span><br>
+                            <small style="color:#666;">${detail}</small>
+                        </div>
+                        <div style="display:flex; gap:5px; align-items:center;">
+                            <button class="btn-copy" onclick="copyLink('${key}')">🔗 Link</button>
+                            <button class="btn-danger" onclick="deleteEvent('${key}')">ลบ</button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
             });
-        });
+        }
 
     </script>
 </body>
